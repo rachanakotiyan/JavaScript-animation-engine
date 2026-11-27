@@ -1,3 +1,4 @@
+import { AnimationLoop } from "../animation/AnimationLoop";
 import { DefaultConfig } from "../config/DefaultConfig";
 import type {
   EngineConfig,
@@ -8,6 +9,7 @@ import type {
 export class ASCIIEngine {
   readonly config: EngineConfig;
 
+  private readonly animationLoop: AnimationLoop;
   private state: EngineLifecycleState = "idle";
 
   constructor(overrides: EngineConfigOverrides = {}) {
@@ -21,6 +23,10 @@ export class ASCIIEngine {
     };
 
     this.validateConfig();
+    this.animationLoop = new AnimationLoop(
+      this.update,
+      this.config.frameRate,
+    );
   }
 
   getState(): EngineLifecycleState {
@@ -28,28 +34,46 @@ export class ASCIIEngine {
   }
 
   start(): void {
-    if (this.state === "disposed") {
-      throw new Error("Cannot start an ASCIIEngine after it has been destroyed.");
+    switch (this.state) {
+      case "idle":
+      case "stopped":
+        this.animationLoop.start();
+        this.state = "running";
+        return;
+      case "paused":
+        this.animationLoop.resume();
+        this.state = "running";
+        return;
+      case "running":
+        return;
+      case "disposed":
+        throw new Error("Cannot start an ASCIIEngine after it has been destroyed.");
     }
-
-    this.state = "running";
   }
 
   pause(): void {
     if (this.state === "running") {
+      this.animationLoop.pause();
       this.state = "paused";
     }
   }
 
   stop(): void {
     if (this.state !== "disposed") {
+      this.animationLoop.stop();
       this.state = "stopped";
     }
   }
 
   destroy(): void {
+    this.animationLoop.destroy();
     this.state = "disposed";
   }
+
+  private readonly update = (
+    deltaTime: number,
+    elapsedTime: number,
+  ): void => {};
 
   private validateConfig(): void {
     const { columns, rows } = this.config.resolution;
