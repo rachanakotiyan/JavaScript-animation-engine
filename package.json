@@ -1,10 +1,25 @@
 {
   "name": "javascript-animation-engine",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A framework-independent TypeScript animation engine.",
+  "type": "module",
+  "main": "./dist/javascript-animation-engine.umd.js",
+  "module": "./dist/javascript-animation-engine.es.js",
+  "browser": "./dist/javascript-animation-engine.umd.js",
+  "exports": {
+    ".": {
+      "import": "./dist/javascript-animation-engine.es.js",
+      "require": "./dist/javascript-animation-engine.umd.js",
+      "default": "./dist/javascript-animation-engine.es.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -13,7 +28,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "bugs": {
     "url": "https://github.com/rachanakotiyan/JavaScript-animation-engine/issues"
   },
