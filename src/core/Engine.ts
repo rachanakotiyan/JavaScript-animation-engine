@@ -17,6 +17,11 @@ import type {
   EngineLifecycleState,
 } from "./Types";
 
+export type EngineUpdateCallback = (
+  deltaTime: number,
+  elapsedTime: number,
+) => void;
+
 const FONT_FAMILY = "monospace";
 const FONT_SIZE = 12;
 const CHARACTER_ASPECT_RATIO = 0.6;
@@ -34,6 +39,7 @@ export class ASCIIEngine {
   private readonly readbackContext: CanvasRenderingContext2D;
   private readonly resolutionManager: ResolutionManager;
   private readonly asciiRenderer: Renderer;
+  private readonly updateCallbacks = new Set<EngineUpdateCallback>();
   private readonly resizeObserver: ResizeObserver | null;
   private state: EngineLifecycleState = "idle";
   private renderWidth = 0;
@@ -134,6 +140,19 @@ export class ASCIIEngine {
     return this.state;
   }
 
+  addUpdateCallback(callback: EngineUpdateCallback): () => void {
+    if (this.state === "disposed") {
+      throw new Error(
+        "Cannot register an update callback on a destroyed ASCIIEngine.",
+      );
+    }
+
+    this.updateCallbacks.add(callback);
+    return () => {
+      this.updateCallbacks.delete(callback);
+    };
+  }
+
   start(): void {
     switch (this.state) {
       case "idle":
@@ -172,6 +191,7 @@ export class ASCIIEngine {
     }
 
     this.animationLoop.destroy();
+    this.updateCallbacks.clear();
     this.resizeObserver?.disconnect();
     this.webglRenderer.dispose();
     this.sceneManager.clear();
@@ -181,10 +201,20 @@ export class ASCIIEngine {
   }
 
   private readonly update = (
-    _deltaTime: number,
-    _elapsedTime: number,
+    deltaTime: number,
+    elapsedTime: number,
   ): void => {
-    this.renderFrame();
+    for (const callback of [...this.updateCallbacks]) {
+      callback(deltaTime, elapsedTime);
+
+      if (this.state !== "running") {
+        return;
+      }
+    }
+
+    if (this.state === "running") {
+      this.renderFrame();
+    }
   };
 
   private readonly handleResize = (): void => {
