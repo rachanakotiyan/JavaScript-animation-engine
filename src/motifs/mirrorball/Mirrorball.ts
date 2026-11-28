@@ -69,9 +69,16 @@ export class Mirrorball {
       this.supportMaterial,
     );
 
+    const suspensionPointY =
+      this.geometries.chainPosition.y +
+      this.geometries.chainGeometry.parameters.height / 2;
+
     this.sphere.position.copy(this.geometries.spherePosition);
     this.chain.position.copy(this.geometries.chainPosition);
     this.connector.position.copy(this.geometries.connectorPosition);
+    this.sphere.position.y -= suspensionPointY;
+    this.chain.position.y -= suspensionPointY;
+    this.connector.position.y -= suspensionPointY;
     this.group.add(this.chain, this.connector, this.sphere);
   }
 
