@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASCII Engine - Basic 3D Render</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #10131a;
+        color: #e9edf5;
+      }
+
+      body {
+        box-sizing: border-box;
+        margin: 0;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+
+      main {
+        margin: 0 auto;
+        max-width: 960px;
+      }
+
+      #stage {
+        height: min(68vh, 640px);
+        min-height: 280px;
+        width: 100%;
+        border: 1px solid #394150;
+        background: #080b12;
+      }
+
+      #output {
+        display: block;
+        height: 100%;
+        width: 100%;
+      }
+
+      button {
+        margin-top: 1rem;
+        padding: 0.6rem 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Basic 3D to ASCII render</h1>
+      <p>A lit Three.js sphere rendered live as colored ASCII.</p>
+      <div id="stage">
+        <canvas id="output" aria-label="Live ASCII rendering of a 3D sphere"></canvas>
+      </div>
+      <button id="destroy" type="button">Destroy engine</button>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

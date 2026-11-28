@@ -34,10 +34,12 @@ export class ASCIIEngine {
   private readonly readbackContext: CanvasRenderingContext2D;
   private readonly resolutionManager: ResolutionManager;
   private readonly asciiRenderer: Renderer;
+  private readonly resizeObserver: ResizeObserver | null;
   private state: EngineLifecycleState = "idle";
   private renderWidth = 0;
   private renderHeight = 0;
   private cameraAspectRatio = 0;
+  private resolutionDirty = true;
 
   constructor(overrides: EngineConfigOverrides = {}) {
     this.config = {
@@ -119,6 +121,13 @@ export class ASCIIEngine {
       this.update,
       this.config.frameRate,
     );
+
+    if (this.config.autoResize && typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(this.handleResize);
+      this.resizeObserver.observe(outputCanvas.parentElement ?? outputCanvas);
+    } else {
+      this.resizeObserver = null;
+    }
   }
 
   getState(): EngineLifecycleState {
@@ -163,6 +172,7 @@ export class ASCIIEngine {
     }
 
     this.animationLoop.destroy();
+    this.resizeObserver?.disconnect();
     this.webglRenderer.dispose();
     this.sceneManager.clear();
     this.readbackCanvas.width = 0;
@@ -177,30 +187,24 @@ export class ASCIIEngine {
     this.renderFrame();
   };
 
+  private readonly handleResize = (): void => {
+    if (this.state === "disposed") {
+      return;
+    }
+
+    this.resolutionDirty = true;
+    this.updateRenderDimensions();
+  };
+
   private renderFrame(): void {
-    const resolution = this.resolutionManager.recalculateDimensions();
-
     if (
-      resolution.canvasWidth !== this.renderWidth ||
-      resolution.canvasHeight !== this.renderHeight
+      this.resolutionDirty ||
+      (this.config.autoResize && this.resizeObserver === null)
     ) {
-      this.webglRenderer.setSize(
-        resolution.canvasWidth,
-        resolution.canvasHeight,
-        false,
-      );
-      this.readbackCanvas.width = resolution.canvasWidth;
-      this.readbackCanvas.height = resolution.canvasHeight;
-      this.renderWidth = resolution.canvasWidth;
-      this.renderHeight = resolution.canvasHeight;
+      this.updateRenderDimensions();
     }
 
-    const aspectRatio = resolution.canvasWidth / resolution.canvasHeight;
-    if (aspectRatio !== this.cameraAspectRatio) {
-      this.cameraManager.updateAspectRatio(aspectRatio);
-      this.cameraAspectRatio = aspectRatio;
-    }
-
+    const resolution = this.resolutionManager.getResolutionInfo();
     this.webglRenderer.render(
       this.sceneManager.getScene(),
       this.cameraManager.getCamera(),
@@ -226,6 +230,33 @@ export class ASCIIEngine {
       resolution.canvasHeight,
     );
     this.asciiRenderer.render(imageData);
+  }
+
+  private updateRenderDimensions(): void {
+    const resolution = this.resolutionManager.recalculateDimensions();
+
+    if (
+      resolution.canvasWidth !== this.renderWidth ||
+      resolution.canvasHeight !== this.renderHeight
+    ) {
+      this.webglRenderer.setSize(
+        resolution.canvasWidth,
+        resolution.canvasHeight,
+        false,
+      );
+      this.readbackCanvas.width = resolution.canvasWidth;
+      this.readbackCanvas.height = resolution.canvasHeight;
+      this.renderWidth = resolution.canvasWidth;
+      this.renderHeight = resolution.canvasHeight;
+    }
+
+    const aspectRatio = resolution.canvasWidth / resolution.canvasHeight;
+    if (aspectRatio !== this.cameraAspectRatio) {
+      this.cameraManager.updateAspectRatio(aspectRatio);
+      this.cameraAspectRatio = aspectRatio;
+    }
+
+    this.resolutionDirty = false;
   }
 
   private validateConfig(): void {
