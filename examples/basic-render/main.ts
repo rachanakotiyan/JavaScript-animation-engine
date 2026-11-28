@@ -22,10 +22,22 @@ const engine = new ASCIIEngine({
   autoResize: true,
 });
 
+const sphereRadius = 1.1;
+const chainLength = 0.6;
+const connectorHeight = 0.12;
+const motifCenterY =
+  -(chainLength + connectorHeight + sphereRadius * 2) / 2;
+
+engine.cameraManager.setPosition(0, motifCenterY, 5.5);
+engine.cameraManager
+  .getCamera()
+  .lookAt(0, motifCenterY, 0);
+
 const mirrorball = new Mirrorball({
   geometry: {
-    sphereRadius: 1.1,
-    chainLength: 1.7,
+    sphereRadius,
+    chainLength,
+    connectorHeight,
   },
   sphereColor: 0xd4d7dc,
   supportColor: 0x9a9da3,
@@ -50,8 +62,8 @@ const mirrorballLighting = new MirrorballLighting({
 mirrorballLighting.attachTo(scene);
 
 const mirrorballAnimation = new MirrorballAnimation(mirrorball, {
-  rotationSpeed: 0.55,
-  swingAmplitude: 0.035,
+  rotationSpeed: 1.5,
+  swingAmplitude: 0.01,
   swingSpeed: 0.7,
 });
 const removeAnimationUpdate = engine.addUpdateCallback((deltaTime) => {

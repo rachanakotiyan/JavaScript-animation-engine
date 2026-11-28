@@ -34,7 +34,7 @@ export class MirrorballGeometry {
 
   create(): MirrorballGeometryParts {
     const sphereRadius = this.options.sphereRadius ?? 1;
-    const chainLength = this.options.chainLength ?? 1.5;
+    const chainLength = this.options.chainLength ?? 0.6;
     const connectorHeight = this.options.connectorHeight ?? 0.12;
 
     return {

@@ -21,8 +21,8 @@ export class MirrorballAnimation {
     private readonly mirrorball: Mirrorball,
     options: MirrorballAnimationOptions = {},
   ) {
-    this.rotationSpeed = options.rotationSpeed ?? 0.8;
-    this.swingAmplitude = options.swingAmplitude ?? 0.035;
+    this.rotationSpeed = options.rotationSpeed ?? 1.5;
+    this.swingAmplitude = options.swingAmplitude ?? 0.01;
     this.swingSpeed = options.swingSpeed ?? 0.7;
 
     this.validateFinite(this.rotationSpeed, "Rotation speed");

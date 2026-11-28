@@ -1,4 +1,12 @@
-import { Scene, type ColorRepresentation, type Light } from "three";
+import {
+  CanvasTexture,
+  EquirectangularReflectionMapping,
+  Scene,
+  SRGBColorSpace,
+  type ColorRepresentation,
+  type Light,
+  type Texture,
+} from "three";
 import {
   LightingManager,
   type LightPosition,
@@ -20,6 +28,8 @@ export interface MirrorballLightingOptions {
 export class MirrorballLighting {
   private readonly lights: Light[] = [];
   private attachedScene: Scene | null = null;
+  private previousEnvironment: Texture | null = null;
+  private environmentTexture: CanvasTexture | null = null;
   private disposed = false;
 
   constructor(
@@ -54,11 +64,22 @@ export class MirrorballLighting {
       return this;
     }
 
+    if (this.attachedScene !== null) {
+      this.attachedScene.remove(...this.lights);
+      this.restoreEnvironment(this.attachedScene);
+      this.attachedScene = null;
+      this.previousEnvironment = null;
+    }
+
     if (this.lights.length > 0) {
       scene.add(...this.lights);
+      this.previousEnvironment = scene.environment;
+      scene.environment = this.environmentTexture;
       this.attachedScene = scene;
       return this;
     }
+
+    const environmentTexture = this.createEnvironmentTexture();
 
     try {
       this.lights.push(
@@ -83,11 +104,15 @@ export class MirrorballLighting {
           position: this.options.pointPosition ?? [2, 1, 3],
         }),
       );
+      this.previousEnvironment = scene.environment;
+      this.environmentTexture = environmentTexture;
+      scene.environment = environmentTexture;
       this.attachedScene = scene;
       return this;
     } catch (error) {
       scene.remove(...this.lights);
       this.lights.length = 0;
+      environmentTexture.dispose();
       throw error;
     }
   }
@@ -103,11 +128,88 @@ export class MirrorballLighting {
 
     if (this.attachedScene !== null) {
       this.attachedScene.remove(...this.lights);
+      this.restoreEnvironment(this.attachedScene);
     }
 
     this.lights.length = 0;
     this.attachedScene = null;
+    this.previousEnvironment = null;
+    this.environmentTexture?.dispose();
+    this.environmentTexture = null;
     this.disposed = true;
+  }
+
+  private createEnvironmentTexture(): CanvasTexture {
+    if (typeof document === "undefined") {
+      throw new Error(
+        "Mirrorball environment generation requires a browser document.",
+      );
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 512;
+
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      throw new Error(
+        "Unable to acquire a 2D context for the mirrorball environment.",
+      );
+    }
+
+    const { width, height } = canvas;
+    const background = context.createLinearGradient(0, 0, 0, height);
+    background.addColorStop(0, "#020202");
+    background.addColorStop(0.5, "#101010");
+    background.addColorStop(1, "#030303");
+    context.fillStyle = background;
+    context.fillRect(0, 0, width, height);
+
+    this.drawLightPanel(context, width, height, 0.2, 0.15, 0.95);
+    this.drawLightPanel(context, width, height, 0.48, 0.055, 0.7);
+    this.drawLightPanel(context, width, height, 0.72, 0.2, 0.55);
+    this.drawLightPanel(context, width, height, 0.91, 0.035, 0.8);
+
+    const texture = new CanvasTexture(canvas);
+    texture.mapping = EquirectangularReflectionMapping;
+    texture.colorSpace = SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  private drawLightPanel(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    center: number,
+    panelWidth: number,
+    intensity: number,
+  ): void {
+    const centerX = center * width;
+    const halfWidth = (panelWidth * width) / 2;
+    const gradient = context.createLinearGradient(
+      centerX - halfWidth,
+      0,
+      centerX + halfWidth,
+      0,
+    );
+
+    gradient.addColorStop(0, "rgba(255, 255, 255, 0)");
+    gradient.addColorStop(0.22, `rgba(255, 255, 255, ${intensity * 0.08})`);
+    gradient.addColorStop(0.43, `rgba(255, 255, 255, ${intensity * 0.55})`);
+    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${intensity})`);
+    gradient.addColorStop(0.57, `rgba(255, 255, 255, ${intensity * 0.55})`);
+    gradient.addColorStop(0.78, `rgba(255, 255, 255, ${intensity * 0.08})`);
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+    context.fillStyle = gradient;
+    context.fillRect(centerX - halfWidth, 0, halfWidth * 2, height);
+  }
+
+  private restoreEnvironment(scene: Scene): void {
+    if (scene.environment === this.environmentTexture) {
+      scene.environment = this.previousEnvironment;
+    }
   }
 
   private validatePosition(position: LightPosition): void {
