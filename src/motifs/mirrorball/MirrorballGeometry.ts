@@ -34,8 +34,8 @@ export class MirrorballGeometry {
 
   create(): MirrorballGeometryParts {
     const sphereRadius = this.options.sphereRadius ?? 1;
-    const chainLength = this.options.chainLength ?? 0.6;
-    const connectorHeight = this.options.connectorHeight ?? 0.12;
+    const chainLength = this.options.chainLength ?? 0.3;
+    const connectorHeight = this.options.connectorHeight ?? 0.1;
 
     return {
       sphereGeometry: this.geometryManager.createSphere({
@@ -44,17 +44,17 @@ export class MirrorballGeometry {
         heightSegments: this.options.sphereHeightSegments ?? 48,
       }),
       chainGeometry: this.geometryManager.createCylinder({
-        radiusTop: this.options.chainRadius ?? 0.025,
-        radiusBottom: this.options.chainRadius ?? 0.025,
+        radiusTop: this.options.chainRadius ?? 0.015,
+        radiusBottom: this.options.chainRadius ?? 0.015,
         height: chainLength,
-        radialSegments: this.options.chainRadialSegments ?? 12,
+        radialSegments: this.options.chainRadialSegments ?? 8,
         openEnded: true,
       }),
       connectorGeometry: this.geometryManager.createCylinder({
-        radiusTop: this.options.connectorRadius ?? 0.06,
-        radiusBottom: this.options.connectorRadius ?? 0.06,
+        radiusTop: this.options.connectorRadius ?? 0.055,
+        radiusBottom: this.options.connectorRadius ?? 0.055,
         height: connectorHeight,
-        radialSegments: this.options.connectorRadialSegments ?? 16,
+        radialSegments: this.options.connectorRadialSegments ?? 12,
       }),
       spherePosition: new Vector3(0, 0, 0),
       chainPosition: new Vector3(

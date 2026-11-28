@@ -4,6 +4,7 @@ import {
   MeshStandardMaterial,
   type ColorRepresentation,
   type Scene,
+  type Texture,
 } from "three";
 import { GeometryManager } from "../../core/Geometry";
 import {
@@ -18,6 +19,12 @@ export interface MirrorballOptions {
   supportColor?: ColorRepresentation;
   metalness?: number;
   roughness?: number;
+  /**
+   * Intensity multiplier applied to the environment map on the sphere.
+   * Higher values make reflections appear brighter and more prominent.
+   * @default 3.5
+   */
+  envMapIntensity?: number;
 }
 
 export class Mirrorball {
@@ -37,22 +44,31 @@ export class Mirrorball {
   ) {
     const metalness = options.metalness ?? 0.9;
     const roughness = options.roughness ?? 0.22;
+    const envMapIntensity = options.envMapIntensity ?? 3.5;
     this.validateMaterialProperty(metalness, "Metalness");
     this.validateMaterialProperty(roughness, "Roughness");
+    if (!Number.isFinite(envMapIntensity) || envMapIntensity < 0) {
+      throw new RangeError("envMapIntensity must be a non-negative finite number.");
+    }
 
     this.geometries = new MirrorballGeometry(
       options.geometry,
       geometryManager,
     ).create();
+
+    // High metalness + very low roughness + strong envMapIntensity produces the
+    // chrome mirror look.  envMapIntensity above 1 is intentional here: it
+    // compensates for the dark environment seen through ASCII character cells.
     this.sphereMaterial = new MeshStandardMaterial({
-      color: options.sphereColor ?? 0xc5cbd2,
+      color: options.sphereColor ?? 0xd0d5db,
       metalness,
       roughness,
+      envMapIntensity,
     });
     this.supportMaterial = new MeshStandardMaterial({
       color: options.supportColor ?? 0x858b92,
       metalness: 0.75,
-      roughness: 0.3,
+      roughness: 0.35,
     });
 
     this.group = new Group();
@@ -80,6 +96,18 @@ export class Mirrorball {
     this.chain.position.y -= suspensionPointY;
     this.connector.position.y -= suspensionPointY;
     this.group.add(this.chain, this.connector, this.sphere);
+  }
+
+  /**
+   * Explicitly sets the environment map on the sphere material.
+   * Call this after `MirrorballLighting.attachTo()` to ensure the material
+   * uses the same procedural env texture that was set on the scene, with an
+   * independent (and higher) envMapIntensity.
+   */
+  setEnvMap(texture: Texture | null): void {
+    this.ensureNotDisposed();
+    this.sphereMaterial.envMap = texture;
+    this.sphereMaterial.needsUpdate = true;
   }
 
   addTo(scene: Scene): this {

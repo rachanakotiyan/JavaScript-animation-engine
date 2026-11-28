@@ -37,19 +37,19 @@ export class MirrorballLighting {
     private readonly lightingManager: LightingManager = new LightingManager(),
   ) {
     this.validateNonNegativeFinite(
-      options.ambientIntensity ?? 0.2,
+      options.ambientIntensity ?? 0.15,
       "Ambient intensity",
     );
     this.validateNonNegativeFinite(
-      options.directionalIntensity ?? 3,
+      options.directionalIntensity ?? 4,
       "Directional intensity",
     );
     this.validateNonNegativeFinite(
-      options.pointIntensity ?? 40,
+      options.pointIntensity ?? 60,
       "Point intensity",
     );
     this.validateNonNegativeFinite(
-      options.pointDistance ?? 12,
+      options.pointDistance ?? 14,
       "Point distance",
     );
     this.validateNonNegativeFinite(options.pointDecay ?? 2, "Point decay");
@@ -85,23 +85,33 @@ export class MirrorballLighting {
       this.lights.push(
         this.lightingManager.addAmbientLight(scene, {
           color: this.options.ambientColor ?? 0xffffff,
-          intensity: this.options.ambientIntensity ?? 0.2,
+          intensity: this.options.ambientIntensity ?? 0.15,
         }),
       );
       this.lights.push(
         this.lightingManager.addDirectionalLight(scene, {
           color: this.options.directionalColor ?? 0xffffff,
-          intensity: this.options.directionalIntensity ?? 3,
+          intensity: this.options.directionalIntensity ?? 4,
           position: this.options.directionalPosition ?? [-3, 4, 5],
         }),
       );
       this.lights.push(
         this.lightingManager.addPointLight(scene, {
           color: this.options.pointColor ?? 0xffffff,
-          intensity: this.options.pointIntensity ?? 40,
-          distance: this.options.pointDistance ?? 12,
+          intensity: this.options.pointIntensity ?? 60,
+          distance: this.options.pointDistance ?? 14,
           decay: this.options.pointDecay ?? 2,
           position: this.options.pointPosition ?? [2, 1, 3],
+        }),
+      );
+      // Second point light from the opposite side for more specular coverage.
+      this.lights.push(
+        this.lightingManager.addPointLight(scene, {
+          color: this.options.pointColor ?? 0xffffff,
+          intensity: (this.options.pointIntensity ?? 60) * 0.6,
+          distance: this.options.pointDistance ?? 14,
+          decay: this.options.pointDecay ?? 2,
+          position: [-2, 2, -3],
         }),
       );
       this.previousEnvironment = scene.environment;
@@ -115,6 +125,14 @@ export class MirrorballLighting {
       environmentTexture.dispose();
       throw error;
     }
+  }
+
+  /**
+   * Returns the procedural environment texture used for reflections.
+   * The caller may assign this to a material's envMap for per-object control.
+   */
+  getEnvironmentTexture(): CanvasTexture | null {
+    return this.environmentTexture;
   }
 
   getLights(): readonly Light[] {
@@ -139,6 +157,17 @@ export class MirrorballLighting {
     this.disposed = true;
   }
 
+  /**
+   * Builds a high-contrast equirectangular environment texture that simulates
+   * the scattered bright light sources a disco mirrorball reflects.
+   *
+   * Design rationale:
+   *  - The texture is mostly black so dark mirror-like areas read clearly.
+   *  - Bright vertical bands of varying widths and positions mimic ceiling
+   *    spotlights and windows seen from inside the ball.
+   *  - Multiple narrow high-intensity spikes produce the characteristic
+   *    scattered-highlight look when reflected by a low-roughness sphere.
+   */
   private createEnvironmentTexture(): CanvasTexture {
     if (typeof document === "undefined") {
       throw new Error(
@@ -147,8 +176,9 @@ export class MirrorballLighting {
     }
 
     const canvas = document.createElement("canvas");
-    canvas.width = 1024;
-    canvas.height = 512;
+    // Higher resolution gives sharper reflection hotspots in ASCII output.
+    canvas.width = 2048;
+    canvas.height = 1024;
 
     const context = canvas.getContext("2d");
     if (context === null) {
@@ -158,17 +188,28 @@ export class MirrorballLighting {
     }
 
     const { width, height } = canvas;
-    const background = context.createLinearGradient(0, 0, 0, height);
-    background.addColorStop(0, "#020202");
-    background.addColorStop(0.5, "#101010");
-    background.addColorStop(1, "#030303");
-    context.fillStyle = background;
+
+    // Near-black base — mirrors should read dark between highlights.
+    context.fillStyle = "#050505";
     context.fillRect(0, 0, width, height);
 
-    this.drawLightPanel(context, width, height, 0.2, 0.15, 0.95);
-    this.drawLightPanel(context, width, height, 0.48, 0.055, 0.7);
-    this.drawLightPanel(context, width, height, 0.72, 0.2, 0.55);
-    this.drawLightPanel(context, width, height, 0.91, 0.035, 0.8);
+    // Broad primary spotlight (upper third) — the main bright source.
+    this.drawLightBand(context, width, height, 0.18, 0.12, 1.0, 0.65);
+    // Secondary spotlight at mid-right.
+    this.drawLightBand(context, width, height, 0.55, 0.09, 0.9, 0.55);
+    // Narrow sharp spike — produces a crisp hot highlight.
+    this.drawLightBand(context, width, height, 0.36, 0.025, 1.0, 0.72);
+    // Wide soft fill from the right side.
+    this.drawLightBand(context, width, height, 0.78, 0.18, 0.75, 0.45);
+    // Tight rear spike.
+    this.drawLightBand(context, width, height, 0.93, 0.03, 0.95, 0.68);
+    // Faint left fill.
+    this.drawLightBand(context, width, height, 0.03, 0.08, 0.6, 0.35);
+
+    // Horizontal bright strip near the equator (ceiling reflections).
+    this.drawHorizontalBand(context, width, height, 0.35, 0.06, 0.55);
+    // Faint floor reflection near the bottom.
+    this.drawHorizontalBand(context, width, height, 0.82, 0.04, 0.3);
 
     const texture = new CanvasTexture(canvas);
     texture.mapping = EquirectangularReflectionMapping;
@@ -177,33 +218,70 @@ export class MirrorballLighting {
     return texture;
   }
 
-  private drawLightPanel(
+  /**
+   * Draws a vertical Gaussian-shaped light band across the full canvas height.
+   * @param centerU   Horizontal center as a fraction of canvas width [0, 1].
+   * @param bandWidth Width of the band as a fraction of canvas width.
+   * @param peak      Alpha of the band centre (0–1).
+   * @param shoulder  Alpha at ~1 sigma from the centre.
+   */
+  private drawLightBand(
     context: CanvasRenderingContext2D,
     width: number,
     height: number,
-    center: number,
-    panelWidth: number,
-    intensity: number,
+    centerU: number,
+    bandWidth: number,
+    peak: number,
+    shoulder: number,
   ): void {
-    const centerX = center * width;
-    const halfWidth = (panelWidth * width) / 2;
+    const centerX = centerU * width;
+    const halfW = (bandWidth * width) / 2;
+
     const gradient = context.createLinearGradient(
-      centerX - halfWidth,
+      centerX - halfW,
       0,
-      centerX + halfWidth,
+      centerX + halfW,
       0,
     );
 
-    gradient.addColorStop(0, "rgba(255, 255, 255, 0)");
-    gradient.addColorStop(0.22, `rgba(255, 255, 255, ${intensity * 0.08})`);
-    gradient.addColorStop(0.43, `rgba(255, 255, 255, ${intensity * 0.55})`);
-    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${intensity})`);
-    gradient.addColorStop(0.57, `rgba(255, 255, 255, ${intensity * 0.55})`);
-    gradient.addColorStop(0.78, `rgba(255, 255, 255, ${intensity * 0.08})`);
-    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    gradient.addColorStop(0, "rgba(255,255,255,0)");
+    gradient.addColorStop(0.15, `rgba(255,255,255,${(shoulder * 0.3).toFixed(3)})`);
+    gradient.addColorStop(0.38, `rgba(255,255,255,${(shoulder * 0.75).toFixed(3)})`);
+    gradient.addColorStop(0.5, `rgba(255,255,255,${peak.toFixed(3)})`);
+    gradient.addColorStop(0.62, `rgba(255,255,255,${(shoulder * 0.75).toFixed(3)})`);
+    gradient.addColorStop(0.85, `rgba(255,255,255,${(shoulder * 0.3).toFixed(3)})`);
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
 
     context.fillStyle = gradient;
-    context.fillRect(centerX - halfWidth, 0, halfWidth * 2, height);
+    context.fillRect(centerX - halfW, 0, halfW * 2, height);
+  }
+
+  /**
+   * Draws a horizontal luminous strip — simulates ceiling/floor reflections.
+   * @param centerV  Vertical centre as a fraction of canvas height [0, 1].
+   * @param bandH    Strip height as a fraction of canvas height.
+   * @param alpha    Alpha of the strip.
+   */
+  private drawHorizontalBand(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    centerV: number,
+    bandH: number,
+    alpha: number,
+  ): void {
+    const centerY = centerV * height;
+    const halfH = (bandH * height) / 2;
+
+    const gradient = context.createLinearGradient(0, centerY - halfH, 0, centerY + halfH);
+    gradient.addColorStop(0, "rgba(255,255,255,0)");
+    gradient.addColorStop(0.4, `rgba(255,255,255,${(alpha * 0.6).toFixed(3)})`);
+    gradient.addColorStop(0.5, `rgba(255,255,255,${alpha.toFixed(3)})`);
+    gradient.addColorStop(0.6, `rgba(255,255,255,${(alpha * 0.6).toFixed(3)})`);
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+
+    context.fillStyle = gradient;
+    context.fillRect(0, centerY - halfH, width, halfH * 2);
   }
 
   private restoreEnvironment(scene: Scene): void {
